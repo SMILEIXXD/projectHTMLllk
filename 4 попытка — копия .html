@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Лента времени: история языков программирования</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* убираем серый фон при тапе на iOS */
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            background: #e2f0e4;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0.75rem 2rem 0.75rem;
+            color: #1e3a2f;
+        }
+
+        /* контейнер с гориз. скроллом — адаптив для пальцев */
+        .timeline-wrapper {
+            width: 100%;
+            max-width: 1300px;
+            overflow-x: auto;
+            overflow-y: visible;
+            cursor: grab;
+            scroll-behavior: smooth;
+            border-radius: 28px;
+            background: #f6faf5;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+            padding: 1.5rem 0 2rem 0;
+            transition: all 0.2s;
+            border: 1px solid #c2dbc8;
+            /* улучшенный скролл на тач-устройствах */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+
+        .timeline-wrapper:active {
+            cursor: grabbing;
+        }
+
+        /* основная лента (flex-контейнер) */
+        .timeline {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 1.2rem;
+            padding: 0.75rem 2rem 1.8rem 2rem;
+            position: relative;
+            min-width: max-content;
+        }
+
+        /* центральная линия */
+        .timeline-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 3px;
+            background: #8bbf8c;
+            transform: translateY(-50%);
+            border-radius: 3px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* каждый узел (год + карточка) */
+        .timeline-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 3;
+            width: 200px;
+            flex-shrink: 0;
+            transition: transform 0.2s ease;
+        }
+
+        /* для мобильных - немного уменьшаем ширину */
+        @media (max-width: 650px) {
+            .timeline-node {
+                width: 175px;
+            }
+            .timeline {
+                gap: 1rem;
+                padding: 0.5rem 1rem 1.8rem 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .timeline-node {
+                width: 160px;
+            }
+            .info-card h3 {
+                font-size: 1rem;
+            }
+            .year-marker {
+                width: 54px;
+                height: 54px;
+                font-size: 1rem;
+            }
+        }
+
+        .timeline-node:hover {
+            transform: translateY(-3px);
+        }
+
+        /* год - круглая метка на линии, увеличенная зона тапа */
+        .year-marker {
+            background: #ecf9e8;
+            width: 68px;
+            height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: 600;
+            font-size: 1.3rem;
+            letter-spacing: 0.5px;
+            color: #2b6e3c;
+            border: 2px solid #6f9e78;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            font-family: monospace;
+            z-index: 5;
+            background-color: #f3fef0;
+            transition: all 0.2s;
+            cursor: pointer;
+            /* увеличиваем область нажатия */
+            position: relative;
+        }
+        /* псевдо-элемент для расширения зоны тапа (по стандартам доступности) */
+        .year-marker::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 50%;
+            background: transparent;
+        }
+
+        .year-marker:active {
+            background-color: #d4ecd9;
+            transform: scale(0.98);
+        }
+
+        /* карточка */
+        .card-container {
+            position: relative;
+            width: 100%;
+            margin-top: 0.8rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .info-card {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 0.9rem 0.8rem;
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+            border: 1px solid #cbe5cf;
+            width: 100%;
+            cursor: pointer;
+            /* улучшенная область касания */
+            touch-action: manipulation;
+        }
+
+        .info-card:active {
+            background: #f4fcf2;
+            transform: scale(0.99);
+        }
+
+        .info-card h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1f5430;
+            letter-spacing: -0.2px;
+            border-left: 3px solid #6f9e78;
+            padding-left: 10px;
+        }
+
+        .info-card p {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #2b4b36;
+            margin-top: 0.3rem;
+        }
+
+        .lang-badge {
+            display: inline-block;
+            background: #e1f3e4;
+            padding: 0.25rem 0.7rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: #1a6134;
+            margin-top: 0.6rem;
+            letter-spacing: 0.2px;
+        }
+
+        /* стрелки */
+        .arrow-icon {
+            font-size: 1.6rem;
+            font-weight: 400;
+            text-align: center;
+            display: block;
+            letter-spacing: 2px;
+            color: #619b6e;
+            margin: 4px 0;
+        }
+
+        .timeline-node.up {
+            flex-direction: column;
+        }
+        .timeline-node.up .card-container {
+            order: -1;
+            margin-bottom: 0.6rem;
+            margin-top: 0;
+        }
+        .timeline-node.up .year-marker {
+            order: 0;
+        }
+
+        .timeline-node.down {
+            flex-direction: column;
+        }
+        .timeline-node.down .card-container {
+            order: 1;
+            margin-top: 0.6rem;
+            margin-bottom: 0;
+        }
+        .timeline-node.down .year-marker {
+            order: 0;
+        }
+        .timeline-node.down .arrow-icon {
+            transform: rotate(180deg);
+        }
+
+        /* стилизация скролла для всех устройств */
+        .timeline-wrapper::-webkit-scrollbar {
+            height: 6px;
+        }
+        .timeline-wrapper::-webkit-scrollbar-track {
+            background: #ddebe0;
+            border-radius: 20px;
+        }
+        .timeline-wrapper::-webkit-scrollbar-thumb {
+            background: #98b79f;
+            border-radius: 20px;
+        }
+
+        /* заголовок и управление */
+        h1 {
+            font-size: 1.7rem;
+            font-weight: 600;
+            color: #2c5a3b;
+            margin-bottom: 0.2rem;
+            text-align: center;
+            letter-spacing: -0.3px;
+        }
+
+        .sub {
+            color: #4b6e58;
+            margin-bottom: 1.4rem;
+            border-left: 3px solid #7dab86;
+            padding-left: 1rem;
+            font-weight: 400;
+            background: none;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .scroll-hint {
+            margin-top: 1.2rem;
+            background: #ecf6ef;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border: 1px solid #c6decb;
+        }
+
+        button {
+            background: #eaf5ec;
+            border: 1px solid #8ebf92;
+            color: #2b5c3a;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 0 4px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            touch-action: manipulation;
+        }
+
+        button:active {
+            background: #cde5d2;
+            transform: scale(0.96);
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(60, 80, 60, 0.8);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: #fefef5;
+            border-radius: 32px;
+            max-width: 460px;
+            width: 100%;
+            padding: 1.8rem 1.5rem;
+            border: 1px solid #bddbbc;
+            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.2);
+            color: #1e3a2f;
+            position: relative;
+            animation: slideUp 0.2s ease;
+            margin: 0 1rem;
+        }
+
+        .modal-content h2 {
+            font-size: 1.7rem;
+            margin-bottom: 0.4rem;
+            color: #2f6a42;
+            border-left: 4px solid #85b388;
+            padding-left: 1rem;
+            word-break: break-word;
+        }
+
+        .modal-content .modal-year {
+            font-size: 0.9rem;
+            background: #e3f3e3;
+            display: inline-block;
+            padding: 0.2rem 1rem;
+            border-radius: 60px;
+            margin: 0.8rem 0;
+        }
+
+        .modal-content p {
+            line-height: 1.5;
+            margin: 0.9rem 0;
+            font-size: 1rem;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1.3rem;
+            font-size: 2rem;
+            font-weight: 500;
+            color: #8cae8c;
+            cursor: pointer;
+            transition: 0.1s;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 30px;
+            background: transparent;
+            touch-action: manipulation;
+        }
+        .close-modal:active {
+            background: #e0f0e0;
+        }
+        .close-modal:hover {
+            color: #3c784c;
+        }
+        .modal-detail-badge {
+            background: #e2f0e0;
+            border-radius: 30px;
+            padding: 0.4rem 1rem;
+            font-size: 0.85rem;
+            display: inline-block;
+            margin-top: 0.5rem;
+            color: #2a5e3b;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        footer {
+            font-size: 0.7rem;
+            margin-top: 1.5rem;
+            opacity: 0.8;
+            color: #577a64;
+            text-align: center;
+        }
+
+        /* поддержка безопасной зоны на айфонах */
+        @supports (padding: max(0px)) {
+            body {
+                padding-left: max(0.75rem, env(safe-area-inset-left));
+                padding-right: max(0.75rem, env(safe-area-inset-right));
+            }
+            .modal-content {
+                margin-left: max(1rem, env(safe-area-inset-left));
+                margin-right: max(1rem, env(safe-area-inset-right));
+            }
+        }
+    </style>
+</head>
+<body>
+<h1>История языков программирования</h1>
+<div class="sub">Хронология развития — нажмите на карточку или кружок с годом</div>
+
+<div class="timeline-wrapper" id="timelineWrapper">
+    <div class="timeline" id="timelineTrack">
+        <div class="timeline-line"></div>
+        <!-- узлы генерируются через JS -->
+    </div>
+</div>
+
+<div class="scroll-hint">
+    <button id="scrollLeftBtn" aria-label="Назад">◀ Назад</button>
+    <button id="scrollRightBtn" aria-label="Вперед">Вперед ▶</button>
+    <button id="scrollStartBtn" aria-label="В начало"> В начало</button>
+</div>
+<footer>Свайпайте или используйте кнопки • Каждая карточка открывает детали</footer>
+
+<!-- Модальное окно -->
+<div id="infoModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" aria-label="Закрыть">&times;</span>
+        <h2 id="modalTitle">Язык</h2>
+        <div class="modal-year" id="modalYear">год</div>
+        <p id="modalDesc">Подробное описание этапа развития.</p>
+        <div id="modalExtra" class="modal-detail-badge">вклад в историю</div>
+    </div>
+</div>
+
+<script>
+    // Расширенные данные с фактами
+    const timelineData = [
+        { year: "1949", title: "Short Code", desc: "Один из первых языков высокого уровня для UNIVAC.", lang: "Short Code / Рутхаузер", side: "up", fullDesc: "Short Code (1949) — интерпретируемый язык, разработанный Джоном Моучли. Считается первым языком высокого уровня, требовал ручного перевода, но заложил основу для будущих компиляторов." },
+        { year: "1957", title: "FORTRAN", desc: "Первый успешный компилируемый язык для науки.", lang: "FORTRAN (IBM)", side: "down", fullDesc: "FORTRAN (Formula Translation) — команда Джона Бэкуса в IBM. Революция в научных расчётах. Используется до сих пор в физике и метеорологии." },
+        { year: "1958", title: "LISP", desc: "Функциональная парадигма, основа ИИ.", lang: "LISP — Джон Маккарти", side: "up", fullDesc: "LISP — второй по возрасту высокоуровневый язык. Ввёл сборку мусора, рекурсию. Вдохновил Clojure, Scheme и системы искусственного интеллекта." },
+        { year: "1959", title: "COBOL", desc: "Бизнес-язык, живёт в банках.", lang: "COBOL (Грейс Хоппер)", side: "down", fullDesc: "COBOL создан для обработки данных. Более 95% банкоматов используют legacy-код на COBOL. Грейс Хоппер популяризировала компиляцию." },
+        { year: "1964", title: "BASIC", desc: "Обучение программированию.", lang: "BASIC (Кемени & Курц)", side: "up", fullDesc: "BASIC (Beginner's All-purpose Symbolic Instruction Code) дал миллионам людей первый опыт кода. Повлиял на создание Microsoft BASIC." },
+        { year: "1970", title: "Pascal", desc: "Структурное программирование.", lang: "Pascal (Никлаус Вирт)", side: "down", fullDesc: "Pascal — строгий педагогический стандарт. Использовался в ранних версиях Skype и Total Commander. Повлиял на Delphi и Modula." },
+        { year: "1972", title: "C", desc: "Основа UNIX и современных ОС.", lang: "C (Деннис Ритчи)", side: "up", fullDesc: "C — системный язык, ядро Linux, Windows и драйверов. Повлиял на C++, Go, Rust. Высочайшая производительность и гибкость." },
+        { year: "1983", title: "C++", desc: "Объектно-ориентированное расширение C.", lang: "C++ (Бьёрн Страуструп)", side: "down", fullDesc: "C++ добавил классы, полиморфизм. На нём написаны Unreal Engine, Chrome, Photoshop. Ключевой язык для игр и высоконагруженных систем." },
+        { year: "1987", title: "Perl", desc: "Тексты и sysadmin.", lang: "Perl (Ларри Уолл)", side: "up", fullDesc: "Perl — «скотч для интернета», незаменим в обработке логов и CGI-сценариях. Влияние на регулярные выражения." },
+        { year: "1991", title: "Python", desc: "Лидер в науке о данных.", lang: "Python (Гвидо ван Россум)", side: "down", fullDesc: "Python — читаемый и мощный. №1 в AI, бэкенде. Используется YouTube, Instagram, Google. Крупнейшая экосистема библиотек." },
+        { year: "1995", title: "Java", desc: "Write Once, Run Anywhere.", lang: "Java (Sun Microsystems)", side: "up", fullDesc: "Java — JVM, корпоративная разработка, Android. Стабильность и масштабируемость. Миллиарды устройств." },
+        { year: "1995", title: "JavaScript", desc: "Язык веб-интерфейсов.", lang: "JS (Брендан Эйх)", side: "down", fullDesc: "JavaScript оживил браузеры, сейчас работает на сервере (Node.js). Самый популярный язык по числу разработчиков." },
+        { year: "2001", title: "C#", desc: "Современный ООП, .NET.", lang: "C# (Андерс Хейлсберг)", side: "up", fullDesc: "C# — мощь .NET, Unity для игр, enterprise-приложения. Элегантный синтаксис, асинхронность, LINQ." },
+        { year: "2003", title: "Go", desc: "Многопоточность и простота.", lang: "Go (Google)", side: "down", fullDesc: "Go — легкие горутины, быстрая компиляция. На нём написаны Docker, Kubernetes. Серверный язык нового поколения." },
+        { year: "2012", title: "Rust", desc: "Безопасная работа с памятью.", lang: "Rust (Mozilla)", side: "up", fullDesc: "Rust предотвращает ошибки памяти. Используется в Firefox, Windows, Linux. Системное программирование без страха segfault." },
+        { year: "2014", title: "Swift", desc: "Современный язык Apple.", lang: "Swift (Chris Lattner)", side: "down", fullDesc: "Swift — быстрый, выразительный. Заменил Objective-C в iOS/macOS. Открытый исходный код." },
+        { year: "2015", title: "WebAssembly", desc: "Высокая производительность в вебе.", lang: "Wasm (консорциум)", side: "up", fullDesc: "WebAssembly — бинарный формат для браузеров. Позволяет запускать C++/Rust код почти с нативной скоростью." }
+    ];
+
+    const track = document.getElementById('timelineTrack');
+    const wrapper = document.getElementById('timelineWrapper');
+    const modal = document.getElementById('infoModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalYearSpan = document.getElementById('modalYear');
+    const modalDesc = document.getElementById('modalDesc');
+    const modalExtra = document.getElementById('modalExtra');
+
+    function openModal(dataItem) {
+        modalTitle.innerHTML = dataItem.title;
+        modalYearSpan.innerText = `${dataItem.year} год`;
+        modalDesc.innerText = dataItem.fullDesc || dataItem.desc;
+        modalExtra.innerHTML = `${dataItem.lang} — важный этап в истории программирования`;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    function createNode(item) {
+        const nodeDiv = document.createElement('div');
+        nodeDiv.className = `timeline-node ${item.side}`;
+
+        const yearMarker = document.createElement('div');
+        yearMarker.className = 'year-marker';
+        yearMarker.innerText = item.year;
+        // Обработчик клика/тапа для года
+        yearMarker.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openModal(item);
+        });
+        // Для сенсорных устройств также touchstart не нужен из-за click
+        yearMarker.addEventListener('touchstart', (e) => {
+            // просто чтобы не блокировать скролл, но click сработает
+        }, { passive: true });
+
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'card-container';
+
+        const arrowSpan = document.createElement('div');
+        arrowSpan.className = 'arrow-icon';
+        arrowSpan.innerText = item.side === 'up' ? '▲' : '▼';
+
+        const infoCard = document.createElement('div');
+        infoCard.className = 'info-card';
+        infoCard.innerHTML = `
+            <h3>${escapeHtml(item.title)}</h3>
+            <p>${escapeHtml(item.desc)}</p>
+            <div class="lang-badge">🔹 ${escapeHtml(item.lang)}</div>
+        `;
+        infoCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openModal(item);
+        });
+        // улучшение для мобильных - предотвращаем случайное срабатывание при скролле
+        infoCard.addEventListener('touchstart', (e) => {
+            // без preventDefault, чтобы не мешать скроллу
+        }, { passive: true });
+
+        if (item.side === 'up') {
+            cardContainer.appendChild(arrowSpan);
+            cardContainer.appendChild(infoCard);
+        } else {
+            cardContainer.appendChild(infoCard);
+            cardContainer.appendChild(arrowSpan);
+        }
+
+        nodeDiv.appendChild(yearMarker);
+        nodeDiv.appendChild(cardContainer);
+        return nodeDiv;
+    }
+
+    // Простейшая защита от XSS (безопасность)
+    function escapeHtml(str) {
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // Отрисовка всех элементов
+    timelineData.forEach(item => {
+        track.appendChild(createNode(item));
+    });
+
+    // Закрытие модалки: крестик, клик по фону
+    const closeBtn = document.querySelector('.close-modal');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    // Закрытие по Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
+    });
+
+    // Кнопки скролла
+    const leftBtn = document.getElementById('scrollLeftBtn');
+    const rightBtn = document.getElementById('scrollRightBtn');
+    const startBtn = document.getElementById('scrollStartBtn');
+    // Динамический расчет шага прокрутки в зависимости от ширины узлов
+    function getScrollStep() {
+        const firstNode = document.querySelector('.timeline-node');
+        if (firstNode) {
+            const nodeWidth = firstNode.offsetWidth;
+            const gap = parseFloat(getComputedStyle(track).gap) || 16;
+            return nodeWidth + gap;
+        }
+        return 240;
+    }
+
+    leftBtn.addEventListener('click', () => {
+        const step = getScrollStep();
+        wrapper.scrollBy({ left: -step, behavior: 'smooth' });
+    });
+    rightBtn.addEventListener('click', () => {
+        const step = getScrollStep();
+        wrapper.scrollBy({ left: step, behavior: 'smooth' });
+    });
+    startBtn.addEventListener('click', () => wrapper.scrollTo({ left: 0, behavior: 'smooth' }));
+
+    //Поддержка мыши
+    let isDown = false;
+    let startX, scrollLeftPos;
+    wrapper.addEventListener('mousedown', (e) => {
+        isDown = true;
+        wrapper.style.cursor = 'grabbing';
+        startX = e.pageX - wrapper.offsetLeft;
+        scrollLeftPos = wrapper.scrollLeft;
+        e.preventDefault();
+    });
+    wrapper.addEventListener('mouseleave', () => {
+        isDown = false;
+        wrapper.style.cursor = 'grab';
+    });
+    wrapper.addEventListener('mouseup', () => {
+        isDown = false;
+        wrapper.style.cursor = 'grab';
+    });
+    wrapper.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - wrapper.offsetLeft;
+        const walk = (x - startX) * 1.2;
+        wrapper.scrollLeft = scrollLeftPos - walk;
+    });
+    wrapper.style.cursor = 'grab';
+
+    // Улучшенная поддержка тач-событий для свайпа
+    // Не переопределяем touchmove, чтобы не сломать нативный скролл
+
+    // Небольшой фикс: при загрузке смещаемся, чтобы первый элемент не прилипал к левому краю
+    setTimeout(() => {
+        if (wrapper.scrollLeft === 0) {
+            const firstNode = document.querySelector('.timeline-node');
+            if (firstNode) {
+                const offsetLeft = firstNode.offsetLeft;
+                if (offsetLeft > 30) {
+                    wrapper.scrollTo({ left: offsetLeft - 20, behavior: 'smooth' });
+                }
+            }
+        }
+    }, 150);
+
+    // Защита от случайного закрытия модалки при свайпе по фону
+    modal.addEventListener('touchstart', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+    // Обеспечиваем работу клика по карточкам без двойного срабатывания
+    const cards = document.querySelectorAll('.info-card');
+    // Улучшение производительности для мобильных  предотвращаем задержки
+    if ('ontouchstart' in window) {
+        document.body.style.touchAction = 'pan-y pinch-zoom'; // разрешаем вертикальный скролл и зум, горизонтальный-внутри wrapper
+    }
+</script>
+</body>
+</html>
